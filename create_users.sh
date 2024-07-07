@@ -28,13 +28,20 @@ while IFS=';' read -r username groups; do
 
   # Check if user already exists
   if id "$username" &>/dev/null; then
-    echo "User $username already exists, skipping" | tee -a $LOG_FILE
-    continue
-  fi
+    echo "User $username already exists, updating groups" | tee -a $LOG_FILE
+  else
+    # Create user with a personal group
+    useradd -m -s /bin/bash -g "$username" "$username"
+    echo "Created user $username with personal group $username" | tee -a $LOG_FILE
 
-  # Create user and primary group
-  useradd -m -s /bin/bash -G "$username" "$username"
-  echo "Created user and primary group for $username" | tee -a $LOG_FILE
+    # Generate random password
+    password=$(openssl rand -base64 12)
+    echo "$username:$password" | chpasswd
+    echo "Generated password for $username" | tee -a $LOG_FILE
+
+    # Store username and password in secure file
+    echo "$username,$password" >> $PASSWORD_FILE
+  fi
 
   # Add user to additional groups
   IFS=',' read -r -a group_array <<< "$groups"
@@ -49,13 +56,9 @@ while IFS=';' read -r username groups; do
     echo "Added $username to group $group" | tee -a $LOG_FILE
   done
 
-  # Generate random password
-  password=$(openssl rand -base64 12)
-  echo "$username:$password" | chpasswd
-  echo "Generated password for $username" | tee -a $LOG_FILE
-
-  # Store username and password in secure file
-  echo "$username,$password" >> $PASSWORD_FILE
+  # Ensure user belongs to their personal group
+  usermod -g "$username" "$username"
+  echo "Ensured $username belongs to their personal group $username" | tee -a $LOG_FILE
 
 done < "$input_file"
 
